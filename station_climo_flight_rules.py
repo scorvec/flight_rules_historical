@@ -1,7 +1,6 @@
 import requests
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns  # Import Seaborn for additional styling
 
 def fetch_data(station_code, start_date, end_date):
     url = "https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py"
