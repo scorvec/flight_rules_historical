@@ -66,7 +66,7 @@ def find_ceiling(df):
     for index, row in df.iterrows():
         ceiling_found = False
         for i, skyc_column in enumerate(skyc_columns):
-            if row[skyc_column] == "BKN" or row[skyc_column] == "OVC":
+            if row[skyc_column] == "BKN" or row[skyc_column] == "OVC" or row[skyc_column] == "VV":
                 # Convert the value to numeric before assignment
                 df.at[index, 'ceiling'] = pd.to_numeric(row[skyl_columns[i]], errors='coerce')
                 ceiling_found = True
@@ -175,11 +175,11 @@ def plot_subvfr_frequency_by_hour(combined_df):
                     ax.set_xticklabels([str(hour) for hour in range(24)], rotation=90, ha='center')  # Rotate x-axis labels
 
                     # Dynamically set y-axis ticks based on maximum percentage over all months/subplots
-                    max_percentage = max(max_percentage, int(percentage_data.max(skipna=True)))
+                   # max_percentage = max(max_percentage, int(percentage_data.max(skipna=True)))
 
-        for ax in axes.flatten():
-            y_ticks = range(0, max_percentage + 1, 1)
-            ax.set_yticks(y_ticks)
+       # for ax in axes.flatten():
+       #     y_ticks = range(0, max_percentage + 1, 1)
+        #    ax.set_yticks(y_ticks)
 
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
