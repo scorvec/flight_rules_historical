@@ -161,12 +161,16 @@ def plot_subvfr_frequency_by_hour(combined_df):
 
                 for hour in range(24):
                     # Calculate total number of observations for each month and hour
-                    total_hours_overall = len(combined_df[
-                        (combined_df['month'] == month) & (combined_df['hour'] == hour)])
+                    station_hour_month_df = combined_df[
+                    (combined_df['Station'] == station) &
+                    (combined_df['hour'] == hour) &
+                    (combined_df['valid'].dt.month == month)
+                    ]
 
+                    total_hours = len(station_hour_month_df)
                     # Plot sub-VFR frequency by hour for each station
                     hour_df = month_df[month_df['hour'] == hour]
-                    percentage_data = (hour_df['hour'].value_counts(sort=False) / total_hours_overall) * 100
+                    percentage_data = (hour_df['hour'].value_counts(sort=False) / total_hours) * 100
                     ax.bar(percentage_data.index, percentage_data, color=bar_color, alpha=0.7, align='center')
                     ax.set_title(month_df['valid'].dt.strftime('%B').iloc[0])  # Use month names
                     ax.set_xlabel('Hour of Day (UTC)', fontsize=12)
@@ -215,11 +219,17 @@ def plot_flight_category_frequency_by_hour(combined_df, flight_category):
 
                 for hour in range(24):
                     # Calculate total number of observations for each month and hour
-                    total_hours_overall = len(combined_df[(combined_df['month'] == month) & (combined_df['hour'] == hour)])
+                    station_hour_month_df = combined_df[
+                    (combined_df['Station'] == station) &
+                    (combined_df['hour'] == hour) &
+                    (combined_df['valid'].dt.month == month)
+                    ]
+
+                    total_hours = len(station_hour_month_df)
 
                     # Plot flight category frequency by hour for each station
                     hour_df = month_df[month_df['hour'] == hour]
-                    percentage_data = (hour_df['hour'].value_counts(sort=False) / total_hours_overall) * 100
+                    percentage_data = (hour_df['hour'].value_counts(sort=False) / total_hours) * 100
                     ax.bar(percentage_data.index, percentage_data, color=bar_color, alpha=0.7, align='center')
                     ax.set_title(month_df['valid'].dt.strftime('%B').iloc[0])  # Use month names
                     ax.set_xlabel('Hour of Day (UTC)', fontsize=12)
