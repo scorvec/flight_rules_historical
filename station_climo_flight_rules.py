@@ -261,11 +261,13 @@ def combine_dataframes(station_dfs, station_codes):
     return combined_df
 
 if __name__ == "__main__":
+    #####ICAO codes for the stations you are interested in
     station_codes =["CYEG", "CYYC", "EHAM", "EHBK", "EHEH",
         "EHRD", "LFPO", "LFST", "TKPK", "KMLB",
         "KMCN", "KVQQ", "CYMX", "KMZJ", "KSLN",
         "KINT", "KLCQ"]
-
+    
+    #####Start and end time for the climatological period of interest
     start_date = pd.to_datetime("2013-01-01")
     end_date = pd.to_datetime("2022-12-31")
 
