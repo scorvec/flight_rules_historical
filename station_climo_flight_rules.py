@@ -81,10 +81,6 @@ def find_ceiling(df):
 
     return df
 
-#def save_to_csv(df, station_code):
-#    # Save the DataFrame to a CSV file
-#    df.to_csv(f"csv/{station_code}_data.csv", index=False)
-
 def calculate_flight_rules(df):
     # Convert 'ceiling' and 'vsby' columns to numeric
     df['ceiling'] = pd.to_numeric(df['ceiling'], errors='coerce')
@@ -124,7 +120,8 @@ def plot_flight_category_occurrences(combined_df, category_name):
     plt.xlabel('Station', fontsize=14)  # Increase font size
     plt.ylabel(f'Average {category_name} Hours per Year', fontsize=14)  # Increase font size
     plt.title(f'Average {category_name} Hours per Year for Each Station', fontsize=16)  # Increase font size
-
+    climatology_period = f'{combined_df["valid"].dt.year.min()} - {combined_df["valid"].dt.year.max()}'
+    plt.suptitle(f'{category_name} - Climatology Period: {climatology_period}', fontsize=24)
     # Rotate station name labels to prevent overlapping
     plt.xticks(rotation=45, ha='right', fontsize=12)  # Increase font size
 
@@ -154,7 +151,8 @@ def plot_subvfr_frequency_by_hour(combined_df):
         fig.suptitle(f'Sub-VFR Frequency by Hour - {station}', fontsize=24)
 
         max_percentage = 0  # Initialize max_percentage to 0
-
+        climatology_period = f'{combined_df["valid"].dt.year.min()} - {combined_df["valid"].dt.year.max()}'
+        fig.suptitle(f'Sub-VFR Frequency by Hour - {station} - Climatology Period: {climatology_period}', fontsize=24)
         for month, ax in zip(range(1, 13), axes.flatten()):
             month_df = station_df[station_df['month'] == month]
             if not month_df.empty:  # Check if the dataframe is not empty
@@ -212,11 +210,11 @@ def plot_flight_category_frequency_by_hour(combined_df, flight_category):
         fig.suptitle(f'{flight_category} Frequency by Hour - {station}', fontsize=24)
 
         max_percentage = 0  # Initialize max_percentage to 0
-
+        climatology_period = f'{combined_df["valid"].dt.year.min()} - {combined_df["valid"].dt.year.max()}'
+        fig.suptitle(f'{flight_category} Frequency by Hour - {station} - Climatology Period: {climatology_period}', fontsize=24)
         for month, ax in zip(range(1, 13), axes.flatten()):
             month_df = station_df[station_df['month'] == month]
             if not month_df.empty:  # Check if the dataframe is not empty
-
                 for hour in range(24):
                     # Calculate total number of observations for each month and hour
                     station_hour_month_df = combined_df[
@@ -237,12 +235,6 @@ def plot_flight_category_frequency_by_hour(combined_df, flight_category):
                     ax.set_xticks(range(24))
                     ax.set_xticklabels([str(hour) for hour in range(24)], rotation=90, ha='center')  # Rotate x-axis labels
 
-                    # Dynamically set y-axis ticks based on maximum percentage over all months/subplots
-                    #max_percentage = max(max_percentage, int(percentage_data.max(skipna=True)))
-
-        #for ax in axes.flatten():
-        ##    y_ticks = range(0, max_percentage + 1, 1)
-         #   ax.set_yticks(y_ticks)
 
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
@@ -262,13 +254,15 @@ def combine_dataframes(station_dfs, station_codes):
 
 if __name__ == "__main__":
     #####ICAO codes for the stations you are interested in
-    station_codes =["CYEG", "CYYC", "EHAM", "EHBK", "EHEH",
-        "EHRD", "LFPO", "LFST", "TKPK", "KMLB",
-        "KMCN", "KVQQ", "CYMX", "KMZJ", "KSLN",
-        "KINT", "KLCQ"]
+    station_codes=["KFLL","KLAX","KMCO","KBOS","KMVY","KJFK","KLGA","KEWR","TJSJ","KDCA"]
+    #station_codes =["CYEG", "CYYC", "EHAM", "EHBK", "EHEH",
+    ##    "EHRD", "LFPO", "LFST", "TKPK", "KMLB",
+     #   "KMCN", "KVQQ", "CYMX", "KMZJ", "KSLN",
+    #    "KINT", "KLCQ"]
     
     #####Start and end time for the climatological period of interest
-    start_date = pd.to_datetime("2013-01-01")
+    #####WARNING! There of course may not actually be data for this entire period available
+    start_date = pd.to_datetime("1970-01-01")
     end_date = pd.to_datetime("2022-12-31")
 
     station_dfs = []
