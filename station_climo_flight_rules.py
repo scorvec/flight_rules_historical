@@ -1,7 +1,6 @@
 import requests
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap
 
 def fetch_data(station_code, start_date, end_date):
     url = "https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py"
@@ -25,7 +24,7 @@ def fetch_data(station_code, start_date, end_date):
         "missing": "M",
         "trace": "T",
         "direct": "no",
-        "report_type": 3
+        "report_type": [3, 4]
     }
 
     response = requests.get(url, params=params)
@@ -50,7 +49,13 @@ def parse_csv_to_dataframe(csv_data):
      
     #Ensure that observation time column is in datetime format
     df.index = pd.to_datetime(df['valid'])
-    
+
+    # Calculate the time difference between consecutive valid times
+    df["length_obs"] = (df.index.to_series().diff().shift(-1) / pd.Timedelta("1 hour")).fillna(0)
+
+    # Ensure that the "length_obs" value is never greater than 1
+    df["length_obs"] = df["length_obs"].clip(upper=1)
+
     return df
 
 def save_to_csv(df, station_code, file_suffix=''):
@@ -87,36 +92,40 @@ def calculate_flight_rules(df):
     df['vsby'] = pd.to_numeric(df['vsby'], errors='coerce')
 
     # Create new columns for aviation flight rule categories
-    df['VFR'] = (df['ceiling'] >= 2500) & (df['vsby'] >= 6)
+    df['VFR'] = (df['ceiling'] >= 2000) & (df['vsby'] >= 3)
     df['MVFR'] = (
-        ((df['ceiling'] >= 1000) & (df['ceiling'] < 2500) & (df['vsby'] >= 3) & (df['vsby'] <= 5)) |
-        ((df['ceiling'] >= 1000) & (df['ceiling'] < 2500) & (df['vsby'] >= 3)) |
-        ((df['ceiling'] >= 2500) & (df['vsby'] >= 3) & (df['vsby'] <= 5)))
+        ((df['ceiling'] >= 1000) & (df['ceiling'] < 2000) & (df['vsby'] >= 2) & (df['vsby'] < 3)) |
+        ((df['ceiling'] >= 1000) & (df['ceiling'] < 2000) & (df['vsby'] >= 2)) |
+        ((df['ceiling'] >= 2000) & (df['vsby'] >= 2) & (df['vsby'] < 3)))
     df['IFR'] = (
-        ((df['ceiling'] >= 400) & (df['ceiling'] < 1000) & (df['vsby'] >= 1) & (df['vsby'] < 3)) |
+        ((df['ceiling'] >= 400) & (df['ceiling'] < 1000) & (df['vsby'] >= 1) & (df['vsby'] < 2)) |
         ((df['ceiling'] >= 400) & (df['ceiling'] < 1000) & (df['vsby'] >= 1)) |
-        ((df['ceiling'] >= 1000) & (df['vsby'] >= 1) & (df['vsby'] < 3)))
+        ((df['ceiling'] >= 1000) & (df['vsby'] >= 1) & (df['vsby'] < 2)))
     df['LIFR'] = (df['ceiling'] < 400) | (df['vsby'] < 1)
 
     return df
 
 def plot_flight_category_occurrences(combined_df, category_name):
-    # Count the total occurrences of "True" in the specified flight category for each station
-    category_counts = combined_df.groupby('Station')[category_name].sum()
+    # Sum the "length_obs" column for each station and flight category
+    category_counts = combined_df.groupby(['Station', category_name])['length_obs'].sum().unstack()
 
-    # Calculate the total number of rows (hours) for each station
-    total_hours = combined_df.groupby('Station').size()
+    # Sum the "length_obs" column to get the total number of hours for each station
+    total_hours = combined_df.groupby('Station')['length_obs'].sum()
 
     # Calculate the average number of hours per year for each station
-    avg_hours_per_year = (category_counts / total_hours) * 365.25 * 24
+    avg_hours_per_year = (category_counts[True] / total_hours) * 365.25 * 24
 
     # Plot a bar chart with larger size and higher DPI
     plt.figure(figsize=(16, 8), dpi=200)
 
     # Set a colormap based on the count values
-    colors = plt.cm.viridis(category_counts / category_counts.max())
+    colors = plt.cm.viridis(category_counts[True] / category_counts[True].max())
 
-    plt.bar(category_counts.index, avg_hours_per_year, color=colors)
+    # Ensure that both arrays have the same shape
+    x_values = category_counts.index
+    y_values = avg_hours_per_year[category_counts[True].index]
+
+    plt.bar(x_values, y_values, color=colors)
     plt.xlabel('Station', fontsize=14)  # Increase font size
     plt.ylabel(f'Average {category_name} Hours per Year', fontsize=14)  # Increase font size
     plt.title(f'Average {category_name} Hours per Year for Each Station', fontsize=16)  # Increase font size
@@ -130,7 +139,7 @@ def plot_flight_category_occurrences(combined_df, category_name):
     plt.close()
 
 def plot_subvfr_frequency_by_hour(combined_df):
-    # Filter rows based on sub-VFR conditions
+    # Filter rows based on the sub-VFR category
     subvfr_df = combined_df[~combined_df['VFR']]
 
     # Convert the 'valid' column to datetime (if not already)
@@ -140,7 +149,7 @@ def plot_subvfr_frequency_by_hour(combined_df):
     subvfr_df['hour'] = subvfr_df['valid'].dt.hour
 
     # Use a single color for all bars
-    bar_color = 'tab:orange'  # Change color to orange for sub-VFR conditions
+    bar_color = 'tab:blue'
 
     # Create a separate figure for each station
     for station in subvfr_df['Station'].unique():
@@ -153,35 +162,30 @@ def plot_subvfr_frequency_by_hour(combined_df):
         max_percentage = 0  # Initialize max_percentage to 0
         climatology_period = f'{combined_df["valid"].dt.year.min()} - {combined_df["valid"].dt.year.max()}'
         fig.suptitle(f'Sub-VFR Frequency by Hour - {station} - Climatology Period: {climatology_period}', fontsize=24)
+
         for month, ax in zip(range(1, 13), axes.flatten()):
-            month_df = station_df[station_df['month'] == month]
+            month_df = station_df[station_df['valid'].dt.month == month]
             if not month_df.empty:  # Check if the dataframe is not empty
 
                 for hour in range(24):
                     # Calculate total number of observations for each month and hour
                     station_hour_month_df = combined_df[
-                    (combined_df['Station'] == station) &
-                    (combined_df['hour'] == hour) &
-                    (combined_df['valid'].dt.month == month)
+                        (combined_df['Station'] == station) &
+                        (combined_df['hour'] == hour) &
+                        (combined_df['valid'].dt.month == month)
                     ]
 
-                    total_hours = len(station_hour_month_df)
+                    total_hours = station_hour_month_df['length_obs'].sum()
+
                     # Plot sub-VFR frequency by hour for each station
                     hour_df = month_df[month_df['hour'] == hour]
-                    percentage_data = (hour_df['hour'].value_counts(sort=False) / total_hours) * 100
-                    ax.bar(percentage_data.index, percentage_data, color=bar_color, alpha=0.7, align='center')
+                    percentage_data = (hour_df['length_obs'].sum() / total_hours) * 100
+                    ax.bar([hour], [percentage_data], color=bar_color, alpha=0.7, align='center', width=0.8)
                     ax.set_title(month_df['valid'].dt.strftime('%B').iloc[0])  # Use month names
                     ax.set_xlabel('Hour of Day (UTC)', fontsize=12)
                     ax.set_ylabel('%', fontsize=12)
                     ax.set_xticks(range(24))
                     ax.set_xticklabels([str(hour) for hour in range(24)], rotation=90, ha='center')  # Rotate x-axis labels
-
-                    # Dynamically set y-axis ticks based on maximum percentage over all months/subplots
-                   # max_percentage = max(max_percentage, int(percentage_data.max(skipna=True)))
-
-       # for ax in axes.flatten():
-       #     y_ticks = range(0, max_percentage + 1, 1)
-        #    ax.set_yticks(y_ticks)
 
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
@@ -222,13 +226,11 @@ def plot_flight_category_frequency_by_hour(combined_df, flight_category):
                     (combined_df['hour'] == hour) &
                     (combined_df['valid'].dt.month == month)
                     ]
-
-                    total_hours = len(station_hour_month_df)
-
+                    total_hours = station_hour_month_df['length_obs'].sum()
                     # Plot flight category frequency by hour for each station
                     hour_df = month_df[month_df['hour'] == hour]
-                    percentage_data = (hour_df['hour'].value_counts(sort=False) / total_hours) * 100
-                    ax.bar(percentage_data.index, percentage_data, color=bar_color, alpha=0.7, align='center')
+                    percentage_data = ((hour_df[flight_category] * hour_df['length_obs']).sum() / total_hours) * 100
+                    ax.bar([hour], [percentage_data], color=bar_color, alpha=0.7, align='center', width=0.8)
                     ax.set_title(month_df['valid'].dt.strftime('%B').iloc[0])  # Use month names
                     ax.set_xlabel('Hour of Day (UTC)', fontsize=12)
                     ax.set_ylabel('%', fontsize=12)
@@ -254,15 +256,15 @@ def combine_dataframes(station_dfs, station_codes):
 
 if __name__ == "__main__":
     #####ICAO codes for the stations you are interested in
-    station_codes=["KFLL","KLAX","KMCO","KBOS","KMVY","KJFK","KLGA","KEWR","TJSJ","KDCA"]
-    #station_codes =["CYEG", "CYYC", "EHAM", "EHBK", "EHEH",
-    ##    "EHRD", "LFPO", "LFST", "TKPK", "KMLB",
-     #   "KMCN", "KVQQ", "CYMX", "KMZJ", "KSLN",
-    #    "KINT", "KLCQ"]
+    #station_codes=["KFLL","KLAX","KMCO","KBOS","KMVY","KJFK","KLGA","KEWR","TJSJ","KDCA"]
+    station_codes =["CYEG", "CYYC", "EHAM", "EHBK", "EHEH",
+       "EHRD", "LFPO", "LFST", "TKPK", "KMLB",
+       "KMCN", "KVQQ", "CYMX", "KMZJ", "KSLN",
+       "KINT", "KLCQ", "EGPH"]
     
     #####Start and end time for the climatological period of interest
     #####WARNING! There of course may not actually be data for this entire period available
-    start_date = pd.to_datetime("1970-01-01")
+    start_date = pd.to_datetime("2017-01-01")
     end_date = pd.to_datetime("2022-12-31")
 
     station_dfs = []
@@ -318,7 +320,7 @@ if __name__ == "__main__":
     # Plot and save the total number of occurrences of "True" in the flight categories for each station
     flight_categories = ['VFR', 'MVFR', 'IFR', 'LIFR']
     for category_name in flight_categories:
-        plot_flight_category_occurrences(combined_df, category_name)
+       plot_flight_category_occurrences(combined_df, category_name)
 
     # Plot the frequency of sub-VFR conditions by hour and month for each station
     plot_subvfr_frequency_by_hour(combined_df)
